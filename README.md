@@ -1,7 +1,7 @@
 # TPCH data generation (tpchgen-rs)
 
 This repository includes a small helper binary that uses the `tpchgen-rs` crates to generate TPC-H data (Arrow / Parquet).
-The package depends on tpchgen-arrow / tpchgen and uses arrow / parquet (e.g. arrow = "56.2.0", parquet = "56.2.0").
+The package depends on tpchgen-rs crates, arrow and parquet.
 
 ## Running the extension
 
