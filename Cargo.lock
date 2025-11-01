@@ -1101,12 +1101,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
-name = "rusty_quack"
+name = "rusty_tpch"
 version = "0.1.0"
 dependencies = [
  "duckdb",
  "duckdb-loadable-macros",
  "libduckdb-sys",
+ "tpchgen",
+ "tpchgen-arrow",
 ]
 
 [[package]]
@@ -1319,6 +1321,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4cf893c33be71572e0e9aa6dd15e6677937abd686b066eac3f8cd3531688a627"
 dependencies = [
  "winnow",
+]
+
+[[package]]
+name = "tpchgen"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5315a6fb66b84b9dc4ade3ce3d85fc246305c87a8106193e9565b8a45394cbe"
+
+[[package]]
+name = "tpchgen-arrow"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9e70da6e86f54ff3524628dc84cb0a9e674ea28e8a8a82fe3839af8c7fd743b"
+dependencies = [
+ "arrow",
+ "tpchgen",
 ]
 
 [[package]]
