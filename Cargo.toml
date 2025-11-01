@@ -25,3 +25,5 @@ duckdb-loadable-macros = "0.1.11"
 libduckdb-sys = { version = "1.4.1", features = ["loadable-extension"] }
 tpchgen-arrow = "2.0.1"
 tpchgen = "2.0.1"
+arrow = "56.2.0"
+parquet = "56.2.0"

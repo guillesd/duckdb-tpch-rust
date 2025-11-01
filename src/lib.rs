@@ -3,6 +3,8 @@ extern crate duckdb_loadable_macros;
 extern crate libduckdb_sys;
 extern crate tpchgen_arrow;
 extern crate tpchgen;
+extern crate arrow;
+extern crate parquet;
 
 use duckdb::{
     core::{DataChunkHandle, Inserter, LogicalTypeHandle, LogicalTypeId},
@@ -18,6 +20,17 @@ use std::{
     ffi::CString,
     sync::atomic::{AtomicBool, Ordering},
 };
+use arrow::record_batch::RecordBatch;
+use parquet::arrow::ArrowWriter;
+use std::fs::File;
+
+macro_rules! debug_print {
+    ($($arg:tt)*) => {
+        if std::env::var("DEBUG").is_ok() {
+            eprintln!("[PCAP Debug] {}", format!($($arg)*));
+        }
+    };
+}
 
 #[repr(C)]
 struct HelloBindData {
@@ -104,6 +117,23 @@ impl VTab for TpchGenVTab {
         let mut order_arrow_generator = OrderArrow::new(order);
         let mut line_item_arrow_generator = LineItemArrow::new(line_item);
 
+        debug_print!("Writing data...");
+
+        Self::write_batches_to_parquet(
+            customer_arrow_generator,
+            "customer_streaming.parquet"
+        )?;
+
+        Self::write_batches_to_parquet(
+            order_arrow_generator,
+            "order_streaming.parquet"
+        )?;
+
+        Self::write_batches_to_parquet(
+            line_item_arrow_generator,
+            "lineitem_streaming.parquet"
+        )?;
+
         //result
         let vector = output.flat_vector(0);
         let result = CString::new(format!("Successfully generated TPC-H data"))?;
@@ -115,6 +145,28 @@ impl VTab for TpchGenVTab {
     fn parameters() -> Option<Vec<LogicalTypeHandle>> {
         Some(vec![LogicalTypeHandle::from(LogicalTypeId::Varchar)])
     }
+}
+
+impl TpchGenVTab {
+    // Additional helper methods can be added here if needed
+    fn write_batches_to_parquet(
+    batches: impl Iterator<Item = RecordBatch>,
+    path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::create(path)?;
+    let mut batches = batches.peekable();
+    let Some(first_batch) = batches.peek() else {
+        return Ok(()); // no data shrug
+    };
+    let mut writer = ArrowWriter::try_new(file, first_batch.schema(), None)?;
+    
+    for batch in batches {
+        writer.write(&batch)?;
+    }
+    
+    writer.close()?;
+    Ok(())
+}
 }
 
 #[duckdb_entrypoint_c_api()]
