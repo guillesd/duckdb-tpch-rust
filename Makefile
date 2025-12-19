@@ -23,8 +23,10 @@ debug: build_extension_library_debug build_extension_with_metadata_debug
 release: build_extension_library_release build_extension_with_metadata_release
 
 test: test_debug
-test_debug: test_extension_debug
-test_release: test_extension_release
+test_debug:
+	python3 -m duckdb_sqllogictest --test-dir ./test/sql --external-extension ./build/debug/extension/rusty_tpch/rusty_tpch.duckdb_extension --file-path test/sql/rusty_tpch.test
+test_release:
+	python3 -m duckdb_sqllogictest --test-dir ./test/sql --external-extension ./build/release/extension/rusty_tpch/rusty_tpch.duckdb_extension --file-path test/sql/rusty_tpch.test
 
 clean: clean_build clean_rust
 clean_all: clean_configure clean

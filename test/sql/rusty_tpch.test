@@ -1,12 +1,12 @@
-# name: test/sql/rusty_quack.test
+# name: test/sql/rusty_tpch.test
 # description: test rusty_quack extension
 # group: [quack]
 
 # Before we load the extension, this will fail
 statement error
-SELECT example_hello_name('Sam');
+CALL tpch_gen(0.1, 'tmp/dir');
 ----
-Catalog Error: Scalar Function with name rusty_quack does not exist!
+Catalog Error: Table Function with name tpch_gen does not exist!
 
 # Require statement will ensure the extension is loaded from now on
 require rusty_tpch
@@ -15,6 +15,6 @@ require icu
 
 # Confirm the extension works
 query I
-SELECT * from example_hello_name('Sam');
+CALL tpch_gen(0.1, 'tmp/dir');
 ----
-Rusty Quack Sam 🐥
+Successfully generated TPC-H data

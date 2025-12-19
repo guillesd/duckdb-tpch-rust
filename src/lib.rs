@@ -32,6 +32,7 @@ macro_rules! debug_print {
 #[repr(C)]
 struct TpchBindData {
     sf: f64,
+    output_dir: String
 }
 
 #[repr(C)]
@@ -47,7 +48,8 @@ impl VTab for TpchGenVTab {
     fn bind(bind: &BindInfo) -> Result<Self::BindData, Box<dyn std::error::Error>> {
         bind.add_result_column("status", LogicalTypeHandle::from(LogicalTypeId::Varchar));
         let sf: f64 = bind.get_parameter(0).to_string().parse().unwrap();
-        Ok(TpchBindData { sf })
+        let output_dir = bind.get_parameter(1).to_string();
+        Ok(TpchBindData { sf, output_dir })
     }
 
     fn init(_: &InitInfo) -> Result<Self::InitData, Box<dyn std::error::Error>> {
@@ -59,11 +61,12 @@ impl VTab for TpchGenVTab {
     fn func(func: &TableFunctionInfo<Self>, output: &mut DataChunkHandle) -> Result<(), Box<dyn std::error::Error>> {
         let bind_data = func.get_bind_data();
         let init_data = func.get_init_data();
+
         // I need an async runtime to run the generator
         let rt = tokio::runtime::Runtime::new().unwrap();
         let generator = TpchGenerator::builder()
             .with_scale_factor(bind_data.sf)
-            .with_output_dir(PathBuf::from("./tmp/data"))
+            .with_output_dir(PathBuf::from(bind_data.output_dir.clone()))
             .with_tables(vec![Table::Customer, Table::Orders, Table::Lineitem])
             .with_format(OutputFormat::Parquet)
             .build();
@@ -82,7 +85,10 @@ impl VTab for TpchGenVTab {
     }
 
     fn parameters() -> Option<Vec<LogicalTypeHandle>> {
-        Some(vec![LogicalTypeHandle::from(LogicalTypeId::Varchar)])
+        Some(vec![
+            LogicalTypeHandle::from(LogicalTypeId::Float),
+            LogicalTypeHandle::from(LogicalTypeId::Varchar)
+        ])
     }
 }
 
