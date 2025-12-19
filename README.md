@@ -9,7 +9,7 @@ To build the extension in debug mode:
 
 ```
 make configure
-make debug
+make release
 ```
 
 This will produce a debug extension in build/debug/ which you can load in DuckDB:
@@ -21,6 +21,6 @@ duckdb -unsigned
 Then inside DuckDB:
 
 ```sql
-LOAD './build/debug/extension/rusty_tpch/rusty_tpch.duckdb_extension';
-CALL tpch_gen('1');
+LOAD './build/release/extension/rusty_tpch/rusty_tpch.duckdb_extension';
+CALL tpch_gen(100.0, './output/dir');
 ```
