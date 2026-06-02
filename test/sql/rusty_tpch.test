@@ -1,20 +1,85 @@
 # name: test/sql/rusty_tpch.test
-# description: test rusty_quack extension
-# group: [quack]
+# description: test the rusty_tpch extension (parquet generation + DuckDB-table generation)
+# group: [tpch]
 
-# Before we load the extension, this will fail
+# Before the extension is loaded, the functions do not exist.
 statement error
-CALL tpch_gen(0.1, 'tmp/dir');
+CALL tpch_gen(0.1, 'tmp/dir', ['lineitem', 'orders']);
 ----
-Catalog Error: Table Function with name tpch_gen does not exist!
+Catalog Error
 
-# Require statement will ensure the extension is loaded from now on
+# Load the extension for the rest of the file.
 require rusty_tpch
 
-require icu
-
-# Confirm the extension works
+# ---------------------------------------------------------------------------
+# Parquet path: tpch_gen writes files and honors the table list.
+# ---------------------------------------------------------------------------
 query I
-CALL tpch_gen(0.1, 'tmp/dir');
+CALL tpch_gen(0.01, 'tmp/dir', ['lineitem', 'orders']);
 ----
 Successfully generated TPC-H data
+
+# ---------------------------------------------------------------------------
+# DuckDB path: tpch(sf, 'table') emits rows; CREATE TABLE AS materializes them.
+# ---------------------------------------------------------------------------
+statement ok
+CREATE TABLE lineitem AS FROM tpch(0.01, 'lineitem');
+
+# Known SF=0.01 row counts.
+query I
+SELECT count(*) FROM lineitem;
+----
+60175
+
+query I
+SELECT count(*) FROM tpch(0.01, 'orders');
+----
+15000
+
+query I
+SELECT count(*) FROM tpch(0.01, 'nation');
+----
+25
+
+query I
+SELECT count(*) FROM tpch(0.01, 'region');
+----
+5
+
+# Decimal, date and string mapping: the first lineitem row matches the TPC-H spec values.
+query TTTTT
+SELECT l_quantity, l_extendedprice, l_discount, l_shipdate, l_returnflag
+FROM lineitem ORDER BY l_orderkey, l_linenumber LIMIT 1;
+----
+17.00	24710.35	0.04	1996-03-13	N
+
+# Aggregates match the canonical generator (sanity vs official dbgen at SF=0.01).
+query II
+SELECT sum(l_quantity)::HUGEINT, round(sum(l_extendedprice * (1 - l_discount)), 2) FROM lineitem;
+----
+1536127	2045134942.09
+
+# An unknown table name is rejected at bind time.
+statement error
+SELECT * FROM tpch(1, 'not_a_table');
+----
+unknown TPC-H table
+
+# ---------------------------------------------------------------------------
+# Helper: tpch_load_sql returns one CREATE TABLE AS statement per table.
+# ---------------------------------------------------------------------------
+# One settings row + one CREATE TABLE AS per table.
+query I
+SELECT count(*) FROM tpch_load_sql(1);
+----
+9
+
+query T
+SELECT statement FROM tpch_load_sql(1) WHERE table_name = 'lineitem';
+----
+CREATE TABLE lineitem AS FROM tpch(1, 'lineitem');
+
+query T
+SELECT statement FROM tpch_load_sql(1) WHERE table_name = '(settings)';
+----
+SET preserve_insertion_order = false;
