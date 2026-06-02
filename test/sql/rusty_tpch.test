@@ -4,7 +4,7 @@
 
 # Before the extension is loaded, the functions do not exist.
 statement error
-CALL tpch_gen(0.1, 'tmp/dir', ['lineitem', 'orders']);
+CALL tpch_gen(0.1, 'tmp/dir');
 ----
 Catalog Error
 
@@ -12,10 +12,16 @@ Catalog Error
 require rusty_tpch
 
 # ---------------------------------------------------------------------------
-# Parquet path: tpch_gen writes files and honors the table list.
+# Parquet path: tpch_gen writes files. The `tables` named parameter is optional
+# (absent = all tables); a subset is selected with `tables := [...]`.
 # ---------------------------------------------------------------------------
 query I
-CALL tpch_gen(0.01, 'tmp/dir', ['lineitem', 'orders']);
+CALL tpch_gen(0.01, 'tmp/dir_all');
+----
+Successfully generated TPC-H data
+
+query I
+CALL tpch_gen(0.01, 'tmp/dir', tables := ['lineitem', 'orders']);
 ----
 Successfully generated TPC-H data
 

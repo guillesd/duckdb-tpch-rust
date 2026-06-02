@@ -80,9 +80,9 @@ impl VTab for TpchGenVTab {
             .map_err(|e| format!("invalid scale factor: {e}"))?;
         let output_dir = bind.get_parameter(1).to_string();
 
-        // Third parameter is an optional LIST(VARCHAR) of table names. Empty / absent means
-        // "all tables". The previous implementation silently ignored this argument.
-        let tables = match bind.get_parameter(2).to_list() {
+        // `tables` is an optional named parameter (a LIST(VARCHAR)). Absent / empty means
+        // "all tables", e.g. `tpch_gen(1, 'data')` or `tpch_gen(1, 'data', tables := ['orders'])`.
+        let tables = match bind.get_named_parameter("tables").and_then(|v| v.to_list()) {
             Some(list) if !list.is_empty() => {
                 let mut tables = Vec::with_capacity(list.len());
                 for item in list {
@@ -139,8 +139,14 @@ impl VTab for TpchGenVTab {
         Some(vec![
             LogicalTypeHandle::from(LogicalTypeId::Double),
             LogicalTypeHandle::from(LogicalTypeId::Varchar),
-            LogicalTypeHandle::list(&LogicalTypeHandle::from(LogicalTypeId::Varchar)),
         ])
+    }
+
+    fn named_parameters() -> Option<Vec<(String, LogicalTypeHandle)>> {
+        Some(vec![(
+            "tables".to_string(),
+            LogicalTypeHandle::list(&LogicalTypeHandle::from(LogicalTypeId::Varchar)),
+        )])
     }
 }
 

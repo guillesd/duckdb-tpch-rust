@@ -102,15 +102,14 @@ memory, either:
 
 ```sql
 -- Write every table as a Parquet file into ./data:
-CALL tpch_gen(1, 'data', []::VARCHAR[]);
+CALL tpch_gen(1, 'data');
 
--- Or only a subset:
-CALL tpch_gen(1, 'data', ['lineitem', 'orders']);
+-- Or only a subset, via the optional `tables` named parameter:
+CALL tpch_gen(1, 'data', tables := ['lineitem', 'orders']);
 ```
 
-`sf` is the scale factor (`DOUBLE`), `output_dir` the destination directory, and the third argument
-is a `LIST(VARCHAR)` of table names (empty = all tables). Note the explicit `[]::VARCHAR[]` cast for
-an empty list, since a bare `[]` is typed as `INTEGER[]`.
+`sf` is the scale factor (`DOUBLE`) and `output_dir` the destination directory. `tables` is an
+optional named parameter (`LIST(VARCHAR)`); omit it to generate all eight tables.
 
 ## Testing
 
