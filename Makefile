@@ -11,6 +11,10 @@ USE_UNSTABLE_C_API=1
 # Target DuckDB version
 TARGET_DUCKDB_VERSION=v1.5.3
 
+# Pin the Python duckdb used by the test runner to the target version. The unstable C ABI means
+# the test client must match TARGET_DUCKDB_VERSION exactly, so don't rely on PyPI's "latest".
+DUCKDB_TEST_VERSION=1.5.3
+
 all: configure debug
 
 # Include makefiles from DuckDB
@@ -24,9 +28,9 @@ release: build_extension_library_release build_extension_with_metadata_release
 
 test: test_debug
 test_debug:
-	python3 -m duckdb_sqllogictest --test-dir ./test/sql --external-extension ./build/debug/extension/rusty_tpch/rusty_tpch.duckdb_extension --file-path test/sql/rusty_tpch.test
+	$(PYTHON_VENV_BIN) -m duckdb_sqllogictest --test-dir ./test/sql --external-extension ./build/debug/extension/rusty_tpch/rusty_tpch.duckdb_extension --file-path test/sql/rusty_tpch.test
 test_release:
-	python3 -m duckdb_sqllogictest --test-dir ./test/sql --external-extension ./build/release/extension/rusty_tpch/rusty_tpch.duckdb_extension --file-path test/sql/rusty_tpch.test
+	$(PYTHON_VENV_BIN) -m duckdb_sqllogictest --test-dir ./test/sql --external-extension ./build/release/extension/rusty_tpch/rusty_tpch.duckdb_extension --file-path test/sql/rusty_tpch.test
 
 clean: clean_build clean_rust
 clean_all: clean_configure clean
