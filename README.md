@@ -104,7 +104,7 @@ optional named parameters:
 | Parameter | Type | Default | Notes |
 |---|---|---|---|
 | `tables` | `LIST(VARCHAR)` | all 8 tables | subset to generate |
-| `parts` | `INTEGER` | one file per table | split each (large) table into N files at `{dir}/{table}/{table}.{i}.parquet` — the lever for **output file size** (more parts → smaller files) |
+| `parts` | `INTEGER` | one file per table | split **every** table into N files at `{dir}/{table}/{table}.{i}.parquet` — the lever for **output file size** (more parts → smaller files). `nation`/`region` are too small to partition and always emit one file |
 | `part` | `INTEGER` | — | generate only partition `i` of `parts` (for distributed/sharded generation) |
 | `compression` | `VARCHAR` | `snappy` | `uncompressed`, `snappy`, `lz4`; level-based codecs need a level, e.g. `zstd(3)`, `gzip(6)`, `brotli(5)` |
 | `row_group_bytes` | `BIGINT` | `7340032` (7 MB) | target bytes per **row group** *inside* each file (not file size) |
@@ -118,8 +118,12 @@ Parquet output scales ~linearly with the scale factor. With the default **snappy
 - **`lineitem`** ≈ `0.24 GB × SF` — about 65% of the dataset and by far the largest table; the rest:
   `orders` ~0.066, `partsupp` ~0.045, `customer` ~0.013, `part` ~0.007 GB × SF; `supplier` tiny;
   `nation`/`region` a few KB.
-- **`parts := N`** divides a table's bytes roughly evenly: each file ≈ `table_size / N`.
-  Example: SF=10 `lineitem` is ~2.4 GB as one file, or **two ~1.2 GB files** with `parts := 2`.
+- **`parts := N`** is a *uniform* split count applied to every table (except `nation`/`region`,
+  always one file): each file ≈ `that table's size / N`. Because tables differ in size, file sizes
+  differ per table — at SF=10 `parts := 2` yields ~1.2 GB `lineitem` files but only ~0.33 GB
+  `orders` and ~33 MB `part` files. Size `parts` against the table you care about (usually
+  `lineitem`); for uniform file sizes across tables, call `tpch_gen` once per table with a
+  table-specific `parts`.
 - **`zstd(3)`** is roughly **25% smaller** than snappy (SF=10 `lineitem`: ~1.8 GB vs ~2.4 GB), at
   some extra CPU.
 
