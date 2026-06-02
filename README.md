@@ -90,7 +90,11 @@ CALL tpch_gen(1, 'data');
 -- Only a subset, via the optional `tables` named parameter:
 CALL tpch_gen(1, 'data', tables := ['lineitem', 'orders']);
 
--- Tune the Parquet output: compression codec and target row-group size (bytes):
+-- Split each table into N files for smaller output files (controls file size):
+--   data/orders/orders.1.parquet ... data/orders/orders.4.parquet
+CALL tpch_gen(1, 'data', tables := ['orders'], parts := 4);
+
+-- Tune the Parquet encoding: compression codec and target row-group size (bytes):
 CALL tpch_gen(1, 'data', compression := 'zstd(3)', row_group_bytes := 16777216);
 ```
 
@@ -100,8 +104,10 @@ optional named parameters:
 | Parameter | Type | Default | Notes |
 |---|---|---|---|
 | `tables` | `LIST(VARCHAR)` | all 8 tables | subset to generate |
+| `parts` | `INTEGER` | one file per table | split each (large) table into N files at `{dir}/{table}/{table}.{i}.parquet` — the lever for **output file size** (more parts → smaller files) |
+| `part` | `INTEGER` | — | generate only partition `i` of `parts` (for distributed/sharded generation) |
 | `compression` | `VARCHAR` | `snappy` | `uncompressed`, `snappy`, `lz4`; level-based codecs need a level, e.g. `zstd(3)`, `gzip(6)`, `brotli(5)` |
-| `row_group_bytes` | `BIGINT` | `7340032` (7 MB) | target uncompressed bytes per row group |
+| `row_group_bytes` | `BIGINT` | `7340032` (7 MB) | target bytes per **row group** *inside* each file (not file size) |
 
 ### Scaling beyond RAM
 

@@ -37,6 +37,16 @@ CALL tpch_gen(0.01, 'tmp/dir_bad', compression := 'nope');
 ----
 invalid compression
 
+# `parts` splits a table into N files under {dir}/{table}/{table}.{i}.parquet; together they hold
+# the whole table (SF=0.01 orders = 15000 rows).
+statement ok
+CALL tpch_gen(0.01, 'tmp/dir_parts', tables := ['orders'], parts := 4);
+
+query I
+SELECT count(*) FROM read_parquet('tmp/dir_parts/orders/*.parquet');
+----
+15000
+
 # ---------------------------------------------------------------------------
 # DuckDB path: tpch(sf, 'table') emits rows; CREATE TABLE AS materializes them.
 # ---------------------------------------------------------------------------

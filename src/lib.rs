@@ -2,9 +2,10 @@
 //!
 //! Two complementary entry points are registered:
 //!
-//! * `tpch_gen(sf, output_dir [, tables := [...], compression := '...', row_group_bytes := N])` —
+//! * `tpch_gen(sf, output_dir [, tables := [...], parts := N, compression := '...', ...])` —
 //!   writes TPC-H **Parquet files** to disk using the tokio-based `tpchgen-cli` runner. Optimised
-//!   for bulk file generation.
+//!   for bulk file generation. `parts` splits each table into N files (output file size); see the
+//!   README for the full list of optional named parameters.
 //! * `tpch(sf, 'table')` — a **table function** that streams the rows of a single TPC-H table.
 //!   Materialise it into the current database with
 //!   `CREATE TABLE lineitem AS FROM tpch(1, 'lineitem');`.
@@ -18,7 +19,7 @@ extern crate libduckdb_sys;
 
 use duckdb::{
     core::{DataChunkHandle, Inserter, LogicalTypeHandle, LogicalTypeId},
-    vtab::{BindInfo, InitInfo, TableFunctionInfo, VTab},
+    vtab::{BindInfo, InitInfo, TableFunctionInfo, VTab, Value},
     Connection, Result,
 };
 use duckdb_loadable_macros::duckdb_entrypoint_c_api;
@@ -52,6 +53,10 @@ struct TpchGenBindData {
     tables: Vec<CliTable>,
     compression: Compression,
     row_group_bytes: i64,
+    // Output-file partitioning. `parts = Some(n)` splits each table into n files under
+    // `{output_dir}/{table}/{table}.{i}.parquet` (smaller files); `None` writes one file per table.
+    part: Option<i32>,
+    parts: Option<i32>,
 }
 
 struct TpchGenInitData {
@@ -118,12 +123,29 @@ impl VTab for TpchGenVTab {
             None => DEFAULT_PARQUET_ROW_GROUP_BYTES,
         };
 
+        // Optional output-file partitioning (controls the number/size of output files).
+        let parse_i32 = |name: &str, v: Value| -> Result<i32, String> {
+            v.to_string()
+                .parse::<i32>()
+                .map_err(|e| format!("invalid {name}: {e}"))
+        };
+        let part = bind
+            .get_named_parameter("part")
+            .map(|v| parse_i32("part", v))
+            .transpose()?;
+        let parts = bind
+            .get_named_parameter("parts")
+            .map(|v| parse_i32("parts", v))
+            .transpose()?;
+
         Ok(TpchGenBindData {
             sf,
             output_dir,
             tables,
             compression,
             row_group_bytes,
+            part,
+            parts,
         })
     }
 
@@ -145,14 +167,20 @@ impl VTab for TpchGenVTab {
 
         let bind_data = func.get_bind_data();
         let rt = tokio::runtime::Runtime::new()?;
-        let generator = TpchGenerator::builder()
+        let mut builder = TpchGenerator::builder()
             .with_scale_factor(bind_data.sf)
             .with_output_dir(PathBuf::from(bind_data.output_dir.clone()))
             .with_tables(bind_data.tables.clone())
             .with_format(OutputFormat::Parquet)
             .with_parquet_compression(bind_data.compression)
-            .with_parquet_row_group_bytes(bind_data.row_group_bytes)
-            .build();
+            .with_parquet_row_group_bytes(bind_data.row_group_bytes);
+        if let Some(part) = bind_data.part {
+            builder = builder.with_part(part);
+        }
+        if let Some(parts) = bind_data.parts {
+            builder = builder.with_parts(parts);
+        }
+        let generator = builder.build();
         rt.block_on(generator.generate())?;
 
         output.flat_vector(0).insert(0, "Successfully generated TPC-H data");
@@ -180,6 +208,14 @@ impl VTab for TpchGenVTab {
             (
                 "row_group_bytes".to_string(),
                 LogicalTypeHandle::from(LogicalTypeId::Bigint),
+            ),
+            (
+                "part".to_string(),
+                LogicalTypeHandle::from(LogicalTypeId::Integer),
+            ),
+            (
+                "parts".to_string(),
+                LogicalTypeHandle::from(LogicalTypeId::Integer),
             ),
         ])
     }
