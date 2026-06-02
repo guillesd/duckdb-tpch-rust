@@ -109,6 +109,23 @@ optional named parameters:
 | `compression` | `VARCHAR` | `snappy` | `uncompressed`, `snappy`, `lz4`; level-based codecs need a level, e.g. `zstd(3)`, `gzip(6)`, `brotli(5)` |
 | `row_group_bytes` | `BIGINT` | `7340032` (7 MB) | target bytes per **row group** *inside* each file (not file size) |
 
+#### Sizing heuristics
+
+Parquet output scales ~linearly with the scale factor. With the default **snappy** codec (measured,
+~±10%):
+
+- **Whole dataset** ≈ `0.37 GB × SF` (e.g. SF=10 → ~3.7 GB, SF=100 → ~37 GB).
+- **`lineitem`** ≈ `0.24 GB × SF` — about 65% of the dataset and by far the largest table; the rest:
+  `orders` ~0.066, `partsupp` ~0.045, `customer` ~0.013, `part` ~0.007 GB × SF; `supplier` tiny;
+  `nation`/`region` a few KB.
+- **`parts := N`** divides a table's bytes roughly evenly: each file ≈ `table_size / N`.
+  Example: SF=10 `lineitem` is ~2.4 GB as one file, or **two ~1.2 GB files** with `parts := 2`.
+- **`zstd(3)`** is roughly **25% smaller** than snappy (SF=10 `lineitem`: ~1.8 GB vs ~2.4 GB), at
+  some extra CPU.
+
+To target a file size `F` (GB) for `lineitem`: `parts ≈ ceil(0.24 × SF / F)`. For example, ~1 GB
+files at SF=10 → `parts := 3`; ~2 GB files at SF=100 → `parts := 12`.
+
 ### Scaling beyond RAM
 
 In-memory tables cost RAM equal to the dataset (that's the deliverable, not generation overhead —
