@@ -101,6 +101,23 @@ memory, either:
   pressure the parallel unordered insert is also far faster than the alternatives (~10s vs ~40s for
   the ordered insert or `dbgen`), because the insert, not generation, dominates when spilling.
 
+### Benchmark at scale (SF=50)
+
+SF=50 (≈300 M lineitem rows) on the same 10-core machine, DuckDB 1.5.3. The two DuckDB-table runs
+use a **file-backed** database with `memory_limit = '16GB'`; Parquet streams to files:
+
+| Mode | Time | Peak RSS | Output |
+|---|---|---|---|
+| `tpch_gen(...)` Parquet files | **~34s** | ~1.3 GB | 19 GB of `.parquet` |
+| `tpch(...)` + CREATE TABLE AS, `preserve_insertion_order=false` | ~70s | ~11 GB | 14 GB `.db` |
+| official `dbgen(sf=50)` | ~380s | ~14 GB | 13 GB `.db` |
+
+At this scale the DuckDB-table path is **~5.5× faster than `dbgen`** and stays under the memory
+limit. The gap is wider than at SF=5 because, under a file-backed sink, `dbgen`'s insert spills and
+runs mostly single-threaded (~1.6× CPU utilization) while our parallel generation + parallel
+unordered insert keeps all cores busy (~7× utilization). Parquet mode is fastest of all and barely
+touches RAM, since it never materializes the dataset.
+
 ### Parquet files
 
 ```sql
