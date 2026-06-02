@@ -2,8 +2,9 @@
 //!
 //! Two complementary entry points are registered:
 //!
-//! * `tpch_gen(sf, output_dir [, tables := [...]])` — writes TPC-H **Parquet files** to disk using
-//!   the tokio-based `tpchgen-cli` runner. Optimised for bulk file generation.
+//! * `tpch_gen(sf, output_dir [, tables := [...], compression := '...', row_group_bytes := N])` —
+//!   writes TPC-H **Parquet files** to disk using the tokio-based `tpchgen-cli` runner. Optimised
+//!   for bulk file generation.
 //! * `tpch(sf, 'table')` — a **table function** that streams the rows of a single TPC-H table.
 //!   Materialise it into the current database with
 //!   `CREATE TABLE lineitem AS FROM tpch(1, 'lineitem');`.
@@ -33,7 +34,9 @@ use tpchgen::generators::{
     CustomerGenerator, LineItemGenerator, NationGenerator, OrderGenerator, PartGenerator,
     PartSuppGenerator, RegionGenerator, SupplierGenerator,
 };
-use tpchgen_cli::{OutputFormat, Table as CliTable, TpchGenerator};
+use tpchgen_cli::{
+    Compression, OutputFormat, Table as CliTable, TpchGenerator, DEFAULT_PARQUET_ROW_GROUP_BYTES,
+};
 
 /// Number of rows packed into one batch. Matches DuckDB's standard vector size so a batch maps
 /// 1:1 to an output `DataChunk`.
@@ -47,6 +50,8 @@ struct TpchGenBindData {
     sf: f64,
     output_dir: String,
     tables: Vec<CliTable>,
+    compression: Compression,
+    row_group_bytes: i64,
 }
 
 struct TpchGenInitData {
@@ -97,10 +102,28 @@ impl VTab for TpchGenVTab {
             _ => ALL_CLI_TABLES.to_vec(),
         };
 
+        // Optional Parquet output knobs (default to the tpchgen defaults: SNAPPY, 7 MB row groups).
+        let compression = match bind.get_named_parameter("compression") {
+            Some(v) => v
+                .to_string()
+                .parse::<Compression>()
+                .map_err(|e| format!("invalid compression: {e}"))?,
+            None => Compression::SNAPPY,
+        };
+        let row_group_bytes = match bind.get_named_parameter("row_group_bytes") {
+            Some(v) => v
+                .to_string()
+                .parse::<i64>()
+                .map_err(|e| format!("invalid row_group_bytes: {e}"))?,
+            None => DEFAULT_PARQUET_ROW_GROUP_BYTES,
+        };
+
         Ok(TpchGenBindData {
             sf,
             output_dir,
             tables,
+            compression,
+            row_group_bytes,
         })
     }
 
@@ -127,6 +150,8 @@ impl VTab for TpchGenVTab {
             .with_output_dir(PathBuf::from(bind_data.output_dir.clone()))
             .with_tables(bind_data.tables.clone())
             .with_format(OutputFormat::Parquet)
+            .with_parquet_compression(bind_data.compression)
+            .with_parquet_row_group_bytes(bind_data.row_group_bytes)
             .build();
         rt.block_on(generator.generate())?;
 
@@ -143,10 +168,20 @@ impl VTab for TpchGenVTab {
     }
 
     fn named_parameters() -> Option<Vec<(String, LogicalTypeHandle)>> {
-        Some(vec![(
-            "tables".to_string(),
-            LogicalTypeHandle::list(&LogicalTypeHandle::from(LogicalTypeId::Varchar)),
-        )])
+        Some(vec![
+            (
+                "tables".to_string(),
+                LogicalTypeHandle::list(&LogicalTypeHandle::from(LogicalTypeId::Varchar)),
+            ),
+            (
+                "compression".to_string(),
+                LogicalTypeHandle::from(LogicalTypeId::Varchar),
+            ),
+            (
+                "row_group_bytes".to_string(),
+                LogicalTypeHandle::from(LogicalTypeId::Bigint),
+            ),
+        ])
     }
 }
 

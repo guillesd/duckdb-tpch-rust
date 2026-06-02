@@ -25,6 +25,18 @@ CALL tpch_gen(0.01, 'tmp/dir', tables := ['lineitem', 'orders']);
 ----
 Successfully generated TPC-H data
 
+# Optional Parquet output knobs: compression codec and row-group size.
+query I
+CALL tpch_gen(0.01, 'tmp/dir_z', tables := ['region'], compression := 'zstd(3)', row_group_bytes := 1048576);
+----
+Successfully generated TPC-H data
+
+# An invalid compression codec is rejected at bind time.
+statement error
+CALL tpch_gen(0.01, 'tmp/dir_bad', compression := 'nope');
+----
+invalid compression
+
 # ---------------------------------------------------------------------------
 # DuckDB path: tpch(sf, 'table') emits rows; CREATE TABLE AS materializes them.
 # ---------------------------------------------------------------------------

@@ -81,6 +81,28 @@ Benchmark at SF=5 on a 10-core machine, all 8 tables, DuckDB 1.5.3:
 | `tpch(...)` + CREATE TABLE AS (default, ordered single-threaded insert) | ~14s | ~7.5 GB |
 | `tpch_gen(...)` Parquet files | ~4.5s | ~0.9 GB |
 
+### Parquet files
+
+```sql
+-- Write every table as a Parquet file into ./data:
+CALL tpch_gen(1, 'data');
+
+-- Only a subset, via the optional `tables` named parameter:
+CALL tpch_gen(1, 'data', tables := ['lineitem', 'orders']);
+
+-- Tune the Parquet output: compression codec and target row-group size (bytes):
+CALL tpch_gen(1, 'data', compression := 'zstd(3)', row_group_bytes := 16777216);
+```
+
+`sf` is the scale factor (`DOUBLE`) and `output_dir` the destination directory. The rest are
+optional named parameters:
+
+| Parameter | Type | Default | Notes |
+|---|---|---|---|
+| `tables` | `LIST(VARCHAR)` | all 8 tables | subset to generate |
+| `compression` | `VARCHAR` | `snappy` | `uncompressed`, `snappy`, `lz4`; level-based codecs need a level, e.g. `zstd(3)`, `gzip(6)`, `brotli(5)` |
+| `row_group_bytes` | `BIGINT` | `7340032` (7 MB) | target uncompressed bytes per row group |
+
 ### Scaling beyond RAM
 
 In-memory tables cost RAM equal to the dataset (that's the deliverable, not generation overhead —
@@ -117,19 +139,6 @@ limit. The gap is wider than at SF=5 because, under a file-backed sink, `dbgen`'
 runs mostly single-threaded (~1.6× CPU utilization) while our parallel generation + parallel
 unordered insert keeps all cores busy (~7× utilization). Parquet mode is fastest of all and barely
 touches RAM, since it never materializes the dataset.
-
-### Parquet files
-
-```sql
--- Write every table as a Parquet file into ./data:
-CALL tpch_gen(1, 'data');
-
--- Or only a subset, via the optional `tables` named parameter:
-CALL tpch_gen(1, 'data', tables := ['lineitem', 'orders']);
-```
-
-`sf` is the scale factor (`DOUBLE`) and `output_dir` the destination directory. `tables` is an
-optional named parameter (`LIST(VARCHAR)`); omit it to generate all eight tables.
 
 ## Testing
 
