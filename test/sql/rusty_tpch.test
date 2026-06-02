@@ -72,20 +72,26 @@ SELECT * FROM tpch(1, 'not_a_table');
 unknown TPC-H table
 
 # ---------------------------------------------------------------------------
-# Helper: tpch_load_sql returns one CREATE TABLE AS statement per table.
+# Helper: tpch_load returns one CREATE TABLE AS statement per table.
 # ---------------------------------------------------------------------------
 # One settings row + one CREATE TABLE AS per table.
 query I
-SELECT count(*) FROM tpch_load_sql(1);
+SELECT count(*) FROM tpch_load(1);
 ----
 9
 
 query T
-SELECT statement FROM tpch_load_sql(1) WHERE table_name = 'lineitem';
+SELECT statement FROM tpch_load(1) WHERE table_name = 'lineitem';
 ----
 CREATE TABLE lineitem AS FROM tpch(1, 'lineitem');
 
 query T
-SELECT statement FROM tpch_load_sql(1) WHERE table_name = '(settings)';
+SELECT statement FROM tpch_load(1) WHERE table_name = '(settings)';
 ----
 SET preserve_insertion_order = false;
+
+# The optional `tables` parameter restricts the script (settings row + 2 tables = 3 rows).
+query I
+SELECT count(*) FROM tpch_load(1, tables := ['lineitem', 'orders']);
+----
+3

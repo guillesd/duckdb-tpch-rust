@@ -2,13 +2,13 @@
 //!
 //! Two complementary entry points are registered:
 //!
-//! * `tpch_gen(sf, output_dir, [tables])` — writes TPC-H **Parquet files** to disk using the
-//!   tokio-based `tpchgen-cli` runner. Optimised for bulk file generation.
+//! * `tpch_gen(sf, output_dir [, tables := [...]])` — writes TPC-H **Parquet files** to disk using
+//!   the tokio-based `tpchgen-cli` runner. Optimised for bulk file generation.
 //! * `tpch(sf, 'table')` — a **table function** that streams the rows of a single TPC-H table.
 //!   Materialise it into the current database with
 //!   `CREATE TABLE lineitem AS FROM tpch(1, 'lineitem');`.
 //!   A duckdb-rs table function cannot reach the calling connection, so the extension cannot
-//!   create the tables itself (unlike the C++ `dbgen`). `tpch_load_sql(sf)` returns the full set
+//!   create the tables itself (unlike the C++ `dbgen`). `tpch_load(sf)` returns the full set
 //!   of `CREATE TABLE ... AS` statements as a convenience.
 
 extern crate duckdb;
@@ -179,6 +179,19 @@ impl TpchTable {
             "orders" => Some(Self::Orders),
             "lineitem" => Some(Self::Lineitem),
             _ => None,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Nation => "nation",
+            Self::Region => "region",
+            Self::Part => "part",
+            Self::Supplier => "supplier",
+            Self::Partsupp => "partsupp",
+            Self::Customer => "customer",
+            Self::Orders => "orders",
+            Self::Lineitem => "lineitem",
         }
     }
 
@@ -598,26 +611,27 @@ impl VTab for TpchTableVTab {
 }
 
 // =============================================================================================
-// Convenience: `tpch_load_sql(sf)` returns the CREATE TABLE ... AS statements for every table.
+// Convenience: `tpch_load(sf [, tables := [...]])` returns the CREATE TABLE ... AS load script.
 // =============================================================================================
 
-struct TpchLoadSqlBindData {
+struct TpchLoadBindData {
     sf: f64,
+    tables: Vec<String>,
 }
 
-struct TpchLoadSqlInitData {
+struct TpchLoadInitData {
     done: AtomicBool,
 }
 
-struct TpchLoadSqlVTab;
+struct TpchLoadVTab;
 
 const TABLE_NAMES: [&str; 8] = [
     "nation", "region", "part", "supplier", "partsupp", "customer", "orders", "lineitem",
 ];
 
-impl VTab for TpchLoadSqlVTab {
-    type BindData = TpchLoadSqlBindData;
-    type InitData = TpchLoadSqlInitData;
+impl VTab for TpchLoadVTab {
+    type BindData = TpchLoadBindData;
+    type InitData = TpchLoadInitData;
 
     fn bind(bind: &BindInfo) -> Result<Self::BindData, Box<dyn Error>> {
         bind.add_result_column("table_name", varchar());
@@ -627,11 +641,28 @@ impl VTab for TpchLoadSqlVTab {
             .to_string()
             .parse()
             .map_err(|e| format!("invalid scale factor: {e}"))?;
-        Ok(TpchLoadSqlBindData { sf })
+
+        // Optional `tables` named parameter, mirroring `tpch_gen`: emit statements only for the
+        // requested tables; absent / empty means all eight.
+        let tables = match bind.get_named_parameter("tables").and_then(|v| v.to_list()) {
+            Some(list) if !list.is_empty() => {
+                let mut tables = Vec::with_capacity(list.len());
+                for item in list {
+                    let name = item.to_string();
+                    let table = TpchTable::from_name(&name)
+                        .ok_or_else(|| format!("unknown TPC-H table: {name}"))?;
+                    tables.push(table.as_str().to_string());
+                }
+                tables
+            }
+            _ => TABLE_NAMES.iter().map(|s| s.to_string()).collect(),
+        };
+
+        Ok(TpchLoadBindData { sf, tables })
     }
 
     fn init(_: &InitInfo) -> Result<Self::InitData, Box<dyn Error>> {
-        Ok(TpchLoadSqlInitData {
+        Ok(TpchLoadInitData {
             done: AtomicBool::new(false),
         })
     }
@@ -643,7 +674,8 @@ impl VTab for TpchLoadSqlVTab {
             return Ok(());
         }
 
-        let sf = func.get_bind_data().sf;
+        let bind_data = func.get_bind_data();
+        let sf = bind_data.sf;
         let name_vector = output.flat_vector(0);
         let stmt_vector = output.flat_vector(1);
 
@@ -651,17 +683,24 @@ impl VTab for TpchLoadSqlVTab {
         // This is the single biggest throughput lever — see the README benchmark.
         name_vector.insert(0, "(settings)");
         stmt_vector.insert(0, "SET preserve_insertion_order = false;");
-        for (i, name) in TABLE_NAMES.iter().enumerate() {
-            name_vector.insert(i + 1, *name);
+        for (i, name) in bind_data.tables.iter().enumerate() {
+            name_vector.insert(i + 1, name.as_str());
             let statement = format!("CREATE TABLE {name} AS FROM tpch({sf}, '{name}');");
             stmt_vector.insert(i + 1, statement.as_str());
         }
-        output.set_len(TABLE_NAMES.len() + 1);
+        output.set_len(bind_data.tables.len() + 1);
         Ok(())
     }
 
     fn parameters() -> Option<Vec<LogicalTypeHandle>> {
         Some(vec![LogicalTypeHandle::from(LogicalTypeId::Double)])
+    }
+
+    fn named_parameters() -> Option<Vec<(String, LogicalTypeHandle)>> {
+        Some(vec![(
+            "tables".to_string(),
+            LogicalTypeHandle::list(&LogicalTypeHandle::from(LogicalTypeId::Varchar)),
+        )])
     }
 }
 
@@ -673,6 +712,6 @@ impl VTab for TpchLoadSqlVTab {
 pub unsafe fn extension_entrypoint(con: Connection) -> Result<(), Box<dyn Error>> {
     con.register_table_function::<TpchGenVTab>("tpch_gen")?;
     con.register_table_function::<TpchTableVTab>("tpch")?;
-    con.register_table_function::<TpchLoadSqlVTab>("tpch_load_sql")?;
+    con.register_table_function::<TpchLoadVTab>("tpch_load")?;
     Ok(())
 }

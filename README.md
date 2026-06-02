@@ -14,7 +14,7 @@ Supported tables: `nation`, `region`, `part`, `supplier`, `partsupp`, `customer`
 
 > Note: a DuckDB Rust table function cannot reach the calling connection, so the extension can't
 > create the tables for you the way the C++ `dbgen` does. Use `CREATE TABLE ... AS FROM tpch(...)`,
-> or `tpch_load_sql(sf)` to get the full load script.
+> or `tpch_load(sf)` to get the full load script.
 
 ## Building
 
@@ -48,9 +48,12 @@ CREATE TABLE lineitem AS FROM tpch(1, 'lineitem');
 -- Or query the generated rows directly:
 SELECT count(*) FROM tpch(0.1, 'orders');
 
--- Generate the full schema: tpch_load_sql returns a ready-to-run load script (the optimal
+-- Generate the full schema: tpch_load returns a ready-to-run load script (the optimal
 -- session setting plus a CREATE TABLE AS for each of the 8 tables).
-SELECT statement FROM tpch_load_sql(1);
+SELECT statement FROM tpch_load(1);
+
+-- Or restrict it to a subset (same `tables` named parameter as tpch_gen):
+SELECT statement FROM tpch_load(1, tables := ['lineitem', 'orders']);
 ```
 
 Generation is parallelized across CPU cores (each worker generates a partition of the table) and
@@ -65,7 +68,7 @@ generated data the order is irrelevant, so set:
 SET preserve_insertion_order = false;
 ```
 
-This lets DuckDB insert in parallel and is the single biggest throughput lever (the `tpch_load_sql`
+This lets DuckDB insert in parallel and is the single biggest throughput lever (the `tpch_load`
 script emits it for you). It has **no effect on query performance** — the 22-query TPC-H suite runs
 in the same time on ordered vs. unordered tables — and produces identical query answers.
 
