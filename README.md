@@ -1,4 +1,4 @@
-# rusty_tpch
+# tpch_rust
 
 A DuckDB extension (written in Rust, on the C-extension template) that generates
 [TPC-H](https://www.tpc.org/tpch/) data. It uses the pure-Rust
@@ -23,7 +23,7 @@ make configure   # one-time: sets up the venv and downloads DuckDB headers for t
 make release     # or: make debug
 ```
 
-This produces `build/release/extension/rusty_tpch/rusty_tpch.duckdb_extension`. The extension
+This produces `build/release/extension/tpch_rust/tpch_rust.duckdb_extension`. The extension
 targets the DuckDB version set in the `Makefile` (`TARGET_DUCKDB_VERSION`, currently `v1.5.3`) and
 must be loaded by a matching DuckDB build.
 
@@ -36,7 +36,7 @@ duckdb -unsigned
 ```
 
 ```sql
-LOAD '/absolute/path/to/build/release/extension/rusty_tpch/rusty_tpch.duckdb_extension';
+LOAD '/absolute/path/to/build/release/extension/tpch_rust/tpch_rust.duckdb_extension';
 ```
 
 ### DuckDB tables (recommended for in-database work)

@@ -1,4 +1,4 @@
-//! `rusty_tpch` — a DuckDB extension that generates TPC-H data.
+//! `tpch_rust` — a DuckDB extension that generates TPC-H data.
 //!
 //! Two complementary entry points are registered:
 //!

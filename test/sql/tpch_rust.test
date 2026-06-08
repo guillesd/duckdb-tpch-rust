@@ -1,5 +1,5 @@
-# name: test/sql/rusty_tpch.test
-# description: test the rusty_tpch extension (parquet generation + DuckDB-table generation)
+# name: test/sql/tpch_rust.test
+# description: test the tpch_rust extension (parquet generation + DuckDB-table generation)
 # group: [tpch]
 
 # Before the extension is loaded, the functions do not exist.
@@ -9,7 +9,7 @@ CALL tpch_gen(0.1, 'tmp/dir');
 Catalog Error
 
 # Load the extension for the rest of the file.
-require rusty_tpch
+require tpch_rust
 
 # ---------------------------------------------------------------------------
 # Parquet path: tpch_gen writes files. The `tables` named parameter is optional
