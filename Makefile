@@ -26,11 +26,13 @@ configure: venv platform extension_version
 debug: build_extension_library_debug build_extension_with_metadata_debug
 release: build_extension_library_release build_extension_with_metadata_release
 
+# Delegate to the standard extension-ci-tools test targets. These honor SKIP_TESTS
+# (e.g. linux_amd64 / musl, where the python test runner can't run inside the CI docker
+# container) and use the correct external-extension path. A hardcoded duckdb_sqllogictest
+# invocation here would force tests to run on those platforms and fail in community CI.
 test: test_debug
-test_debug:
-	$(PYTHON_VENV_BIN) -m duckdb_sqllogictest --test-dir ./test/sql --external-extension ./build/debug/extension/tpch_rust/tpch_rust.duckdb_extension --file-path test/sql/tpch_rust.test
-test_release:
-	$(PYTHON_VENV_BIN) -m duckdb_sqllogictest --test-dir ./test/sql --external-extension ./build/release/extension/tpch_rust/tpch_rust.duckdb_extension --file-path test/sql/tpch_rust.test
+test_debug: test_extension_debug
+test_release: test_extension_release
 
 clean: clean_build clean_rust
 clean_all: clean_configure clean
